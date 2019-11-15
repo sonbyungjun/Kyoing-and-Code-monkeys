@@ -1,5 +1,5 @@
 # LOADMAP
-## One section for one week
+## One section per week
 ### SECTION 01
 * 2019.11.15 ~ 2019.11.21
 
