@@ -76,5 +76,100 @@ public int hashCode() { return 42; }
 4. Object.hash나 Guava의 Hash를 사용해도된다. ( 하지만 Object.Hash는 느리다 )  
 5. 객체가 불변이며 해시코드를 만드는데 시간이 많이 걸린다면은 캐싱하여 사용하자.  
 6. 성능을 높인다고 중요한 필드를 빼먹거나 짤라서 사용하지 말아야 한다 ( 자바2의 String이 그러했음. )
+# 3. toString을 항상 재정의하라
+- Object의 기본 toString 메서드가 우리가 작성한 클래스에 적합한 문자열을 반환하느 경우는 거의 없다.
+- 기본적으로 className@HashCode를 반환은 한다.
+- toString 일반 규약에 따르면 ' 간결하고 사람이 읽기 쉬운 형태의 유익한 정보 '를 반환해야 한다.
+- toString을 잘 구현한 클래스는 사용하기에도 즐겁고 디버깅도 쉽다.
+- toString은 println,printf, 문자열 +, assert구문에서 사용한다. 결국 호출을 안해도 무의식적으로 사용이 된다.
+- 컬렉션등의 객체에서 출력할 때에도 유용히 쓰여진다.
+- 실전에서 toString은 그 객체가 갖고 있는 주요 정보 모두를 반환하는게 좋다.
+- toString을 반환할떄 문서화를 할지 고민해봐야한다 ( Json,CSV등 )
+    - 사람이 읽기 편하게된다.
+        - 만약에 문서로 제공하게 된다면은 문서롤 객체로 변경할 수 있는 정적팩터리 메서드를 제공해도 좋을것이다.
+    - 포맷을 명시하면은 평생 그 포멧에 얽매이게 된다.
+- 포멧 명시 여부와 상관없이 toString이 반환한 값에 포함된 정보를 얻어올 수 있는 API는 제공해야한다.
+- 정적 유틸클래스나 Enum은 재정의 해줄 필요가 없다.
+- 하위클래스들이 공유해야 할 문자열 푷녀이 있는 추상클래스라면 toString을 재정의 해야 한다.
 
-
+# 4. clone 재정의는 주의해서 진행하라
+    - Cloneable은 복제해도 되는 클래스임을 명시하는 인터페이스지만 의도한 목적을 이루지 못했다.
+        - 가장 큰 이유는 clone의 함수를 Cloneable에 있는것이 아니라 Object에 있는것이다 
+            - [Cloneable](https://github.com/openjdk-mirror/jdk7u-jdk/blob/master/src/share/classes/java/lang/Cloneable.java)
+            - [Object](https://github.com/openjdk-mirror/jdk7u-jdk/blob/master/src/share/classes/java/lang/Object.java)
+        - Object의 Clone메소드는 protected로 외부에서 호출이 불가능하다.
+            - 호출하려면 Reflection으로 해야하며 100%의 성공률을 보이지 못한다.
+    - Cloneable 인터페이스는 Object의 protected된 clone함수의 동작을 결정한다.
+        - Cloneable이 implements가 안되어있으면은 clone호출시 에러가 발생된다. (java.lang.CloneNotSupportedException)
+    - 실무에서 Cloneable을 구현한 클래스의 clone 메서드를 public으로 제공하며, 사용자는 당연히 복제가 제대로 이뤄지리라 기대한다.  
+     이기대를 만족시키려면은 그 클래스와 모든 상위 클래스는 복잡학고, 강제할 수 없고, 허술하게 기술된 프로토콜을 지켜야만 하는데, 그 결과로 깨지기 쉽고  
+     모순적인 매커니즘이 탄생이 되며, 생성자를 호출하지 않아도 객체를 생성할 수 있게 된다.
+        `
+            public class MyNumbers implements Cloneable {
+               private int[] numbers = null;
+            
+               public MyNumbers() {
+                  numbers = new int[10];
+               }
+            
+               public Object clone() throws CloneNotSupportedException {
+                  return super.clone();
+               }
+            }
+    - super.clone을 사용하지 않고 new MyNumbers()를 호출해도 되지만 하위클래스에서 super.clone() 호출시 잘못된 클래스가 만들어지게 된다.
+        - 만약 final로 클래스를 선언하면 문제가 되지 않는다.
+    - 가변 객체를 참조하는 순간 생각할 범위는 넓어진다.
+        - 아래 코드를 보면은 size는 정상적으로 Copy가 되지만 elements는 같은 인스턴스를 바라보게 될것이다.
+        - 가장 간단한것은 clone을 구현할때 elements.clone()으로 카피하며 된다.
+        `
+         public class Stack {
+            private Object[] elements;
+            private int size = 0;
+            private static final int DEFAULT_INITIAL_CAPACITY = 16;
+            public Stack() {
+                this.elements = new Object[DEFAULT_INITIAL_CAPACITY];
+            }
+            public void push(Object e) {
+                ensureCapacity(); elements[size++] =e;
+            }
+            public Object pop() {
+                if (size == 0)
+                    throw new EmptyStackException(); 
+                Object result = elements[--size]; 
+                elements[size] =null; // 다 쓴 참조 해제
+                return result;
+            }
+             // 원소를 위한 공간을 적어도 하나 이상 확보한다.
+             private void ensureCapacity() {
+                if (elements. length == size)
+                    elements = Arrays.copyOf(elements , 2 * size + 1);
+             }
+         }
+         `
+    - 많은 위험성이 있으므로 복사 생성자와 복사 팩터리라는 더 나은 객체 복사 방식을 제공하는것이 낫다.
+# 5. Comparable을 구현할지 고려하라
+    - Comparable 인터페이스의 CompareTo는 성격이 Object의 equals와 비슷하다
+    - CompareTo는 단순 동치성 비교에 더해 순서까지 비교가 가능하며 제너릭 하다
+    - Comparable을 구현한다는 것은 그 클래스의 인스터들 사이에 자연적인 순서가 있다는 것이다.
+    - 검색, 극단값 계산, 자동 정렬되는 컬렉션 관리도 쉽게 가능하다.
+    - Comparable을 사용하면은 제네릭 알고리즘과 컬렉션의 힘을 얻을 수 있다.
+    - compareTo 메서드의 일반 규칙은 equals의 규약과 비슷하다
+        - 이 객체가 주어직 객체보다 적으면 음의정수
+        - 이 객체가 주어진 객체와 같은면 0
+        - 이 객체가 주어진 객체보다 크면은 양의정수
+        - 비교할 수 없으면 ClassCastException을 발생
+    - CompareTo를 구현하면 TreeSet, TreeMap, Collections, Arrays가 사용이 가능하다
+    - equals와 같이 반사성, 대칭성, 추이성을 충족해야 한다.
+        - A == B && B == A
+        - A > B && B < A
+        - A < B && B < C && A < C  
+    - HashSet과 TreeSet에서의 차이
+        - new BigDecimal("1.00") new BeigDecimal("1.0") 을선언
+        - HashSet에다가 2개를 넣으면은 equals로 되어서 1개만 들어간다
+        - TreeSet에다가 2개를 넣으면은 compareTo로 되어서 1개만 들어간
+    - compareTo 메서드로 수행한 동치성 테스트의 결과가 equals와 같아야 한다.
+    - 정적메서드인 Dobule.compare Float.compare를 피해라
+        - 자바 7부터는 Comparator를 사용하라
+    - hashcode의 값 차이로 비교하면 안된다.
+        - 할것이면 Integer.compare(o1.hashCode(), o2.hashCode()) 를 사용하라
+        - 할것이면 Comparator.comparingInt(o -> o.hashCode()) 를 사용하라
