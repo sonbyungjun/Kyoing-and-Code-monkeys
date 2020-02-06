@@ -26,13 +26,13 @@ map.merge(key, 1, Integer::sum);
 
 메서드 참조가 람다보다 간결하지 않을 때도 존재한다.
 
-* 람다 사용
+* 메서드 참조 사용 
 
 ```java
 service.execute(GoshThisClassNameIsHumongous::action);
 ```
 
-* 메서드 참조 사용 
+* 람다 사용
 
 ```java
 service.execute(() -> action());
